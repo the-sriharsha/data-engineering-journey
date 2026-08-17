@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-17
 **Course:** Ansh Lamba — Database Design & Data Modeling Full Course For Beginners [2026]
-**Scope:** Material covered up to 2:50:45
+**Scope:** Complete video
 
 ## 1. Data Modeling
 
@@ -214,15 +214,6 @@ Any set of one or more attributes that uniquely identifies a row.
 
 A candidate key is a **minimal super key**.
 
-Example:
-
-If `student_id` uniquely identifies a row:
-- student_id = super key
-- student_id + name = also a super key
-- student_id + email = also a super key
-
-But the larger combinations are not candidate keys because they are not minimal.
-
 ### Foreign Key
 
 A column or set of columns in a child table that references a key in a parent table, establishing a relationship between the tables.
@@ -328,14 +319,6 @@ Core ideas:
 - each column should contain atomic/single values
 - avoid storing multiple independent values in one cell
 
-Bad:
-
-customer_id | phone_numbers
----|---
-1 | 9999, 8888
-
-Better: store phone values as separate rows/related records.
-
 ### 2NF — Second Normal Form
 
 2NF = 1NF + no partial dependency on a composite primary key.
@@ -350,14 +333,6 @@ This is primarily relevant when the primary key is composite.
 
 A transitive dependency occurs when a non-key attribute depends on another non-key attribute instead of directly on the key.
 
-Example:
-
-`(order_id, product_id) → category_id`
-
-`category_id → category_name`
-
-Therefore category_name is transitively dependent on the original key.
-
 ### BCNF — Boyce-Codd Normal Form
 
 BCNF is stricter than 3NF.
@@ -370,7 +345,444 @@ BCNF is not automatically required for every practical design; 3NF is often suff
 
 ---
 
-## 10. Key Mental Model
+# 10. OLAP / Dimensional Modeling
+
+After the OLTP/normalized modeling section, the course moves into **dimensional modeling**, which is primarily used to model data for OLAP/analytical workloads.
+
+Dimensional modeling organizes analytical data around:
+
+- **fact tables** — measurable business events/processes
+- **dimension tables** — descriptive/contextual information
+
+The goal is to make analytical queries easier and more efficient, often accepting some denormalization/redundancy in dimensions.
+
+---
+
+## 11. OBT — One Big Table
+
+OBT = **One Big Table**.
+
+The basic idea is to combine data from multiple source/normalized tables into a broad table containing the columns needed for a particular analytical purpose.
+
+Conceptually:
+
+```text
+Normalized / OLTP data
+        ↓
+      OBT
+        ↓
+  analytical modeling
+        ↓
+Facts + Dimensions
+```
+
+OBT is not the same thing as the final dimensional model. It can be an intermediate/working representation used before deriving facts and dimensions.
+
+---
+
+## 12. Fact Tables
+
+A fact table represents a measurable business process/event at a defined **grain**.
+
+Examples:
+- sales
+- orders
+- payments
+- trips
+- cancellations
+
+Fact tables generally contain:
+- foreign keys to dimensions
+- numeric measures
+- sometimes other event-level attributes
+
+Example:
+
+```text
+fact_sales
+-----------
+order_date_sk
+customer_sk
+product_sk
+quantity
+sales_amount
+```
+
+### Important
+
+A fact table is **not simply a table containing financial information**.
+
+The important idea is that it represents a business process/event and contains values that can be analyzed, often through aggregation.
+
+---
+
+## 13. Dimension Tables
+
+Dimension tables provide **context** for facts.
+
+Examples:
+- customer
+- product
+- date
+- location
+- driver
+- vehicle
+
+They typically contain descriptive attributes used to filter, group, and explain facts.
+
+Example:
+
+```text
+dim_customer
+------------
+customer_sk
+customer_id
+customer_name
+city
+state
+segment
+```
+
+Dimensions are commonly denormalized in dimensional models to reduce the number of joins required by analytical queries.
+
+---
+
+## 14. Grain
+
+**Grain = what exactly one row in a fact table represents.**
+
+This is one of the most important concepts in dimensional modeling.
+
+Examples:
+
+> One row = one order.
+
+or:
+
+> One row = one order line item.
+
+or:
+
+> One row = one trip.
+
+These are different grains and produce different fact tables.
+
+A useful question is:
+
+> "What does one row represent?"
+
+Do not define grain as "how many records per user/policy." It is the level of detail represented by **one row**.
+
+---
+
+## 15. Measures
+
+Measures are quantitative values stored in or derived from fact data that can be analyzed/aggregated.
+
+Examples:
+- quantity
+- sales_amount
+- revenue
+- discount_amount
+- distance
+- trip_duration
+
+Typical operations include:
+- SUM
+- AVG
+- MIN
+- MAX
+- COUNT
+
+Not every numeric column is automatically a measure; its meaning and behavior at the fact's grain matter.
+
+---
+
+## 16. Star Schema
+
+A star schema has:
+
+- a central fact table
+- dimension tables surrounding it
+
+Example:
+
+```text
+              dim_customer
+                   │
+                   │
+dim_date ─── fact_sales ─── dim_product
+                   │
+                   │
+             dim_location
+```
+
+It is called a **star schema** because the visual structure resembles a star.
+
+Star schemas are commonly preferred for analytical workloads because they provide a simple query structure with relatively few joins.
+
+---
+
+## 17. Snowflake Schema
+
+A snowflake schema is a dimensional model in which one or more dimensions are further normalized into related sub-dimensions.
+
+Example:
+
+```text
+fact_sales
+    │
+    ▼
+dim_product
+    │
+    ▼
+dim_category
+```
+
+Compared with a star schema, this introduces additional joins but can reduce some dimension redundancy.
+
+Mental model:
+
+```text
+STAR
+Fact ←→ Dimensions
+
+SNOWFLAKE
+Fact ←→ Dimensions ←→ Sub-dimensions
+```
+
+---
+
+## 18. Date Dimension
+
+A date dimension provides reusable analytical time context.
+
+Example attributes:
+
+```text
+date_sk
+date
+ day
+month
+quarter
+year
+```
+
+A fact can reference the date dimension using a date surrogate key, allowing consistent time-based analysis across the warehouse.
+
+---
+
+## 19. Surrogate Keys
+
+A surrogate key is a system-generated key used to identify a dimension record, typically independent of the business/natural key.
+
+Example:
+
+```text
+dim_customer
+------------
+customer_sk   ← surrogate key
+customer_id   ← business/natural key
+customer_name
+```
+
+A surrogate key is **not simply an encrypted or more readable version of a long key**.
+
+It is usually an artificial/system-generated identifier such as `101`, `102`, `103`, etc.
+
+One major reason surrogate keys become important is historical tracking, especially with SCD Type 2.
+
+---
+
+# 20. Slowly Changing Dimensions (SCD)
+
+Dimensions can change over time.
+
+Example:
+
+```text
+Customer address:
+Bangalore → Hyderabad
+```
+
+SCD techniques define how those changes should be represented while balancing current-state needs and historical requirements.
+
+---
+
+## SCD Type 0
+
+**Do not change the original value.**
+
+Example:
+
+```text
+date_of_birth
+```
+
+The original value is retained permanently.
+
+---
+
+## SCD Type 1
+
+**Overwrite the old value.**
+
+Example:
+
+Before:
+
+```text
+customer_id = 1
+address = Bangalore
+```
+
+After:
+
+```text
+customer_id = 1
+address = Hyderabad
+```
+
+The old Bangalore value is lost.
+
+This is commonly implemented using an upsert/overwrite approach.
+
+Use Type 1 when historical changes do not need to be preserved.
+
+---
+
+## SCD Type 2
+
+**Preserve full history by creating a new dimension version/row.**
+
+Typical columns include:
+
+```text
+customer_sk
+customer_id
+address
+valid_from
+valid_to
+is_current
+```
+
+Example:
+
+```text
+customer_sk | customer_id | address   | valid_from | valid_to   | is_current
+------------|-------------|-----------|------------|------------|-----------
+101         | 1           | Bangalore | 2026-01-01 | 2027-02-01 | 0
+205         | 1           | Hyderabad | 2027-02-01 | NULL       | 1
+```
+
+This allows historical facts to be interpreted using the dimension state that was valid at the relevant time.
+
+**SCD Type 2 is one of the most important SCD patterns for Data Engineering.**
+
+---
+
+## SCD Type 3
+
+Store limited previous/current history in additional columns.
+
+Example:
+
+```text
+customer_id
+current_address
+previous_address
+```
+
+If the customer changes address repeatedly, this design generally retains only the current value and a limited previous value rather than unlimited historical versions.
+
+---
+
+## SCD Types 4–6
+
+The course also introduces additional SCD patterns/hybrid approaches.
+
+For practical interview preparation, prioritize:
+
+1. Type 0
+2. Type 1
+3. Type 2
+3. Type 3
+
+You should recognize Types 4–6, but do not spend disproportionate study time memorizing them before Type 2 is completely solid.
+
+---
+
+# 21. SCD Implementation Concepts
+
+SCD implementations can be handled using approaches such as:
+
+- SQL `MERGE`
+- Spark SQL
+- PySpark
+- warehouse/platform-specific features
+
+This becomes especially relevant later when working with:
+
+**PySpark + Databricks + Delta Lake**.
+
+---
+
+# 22. OLTP → OBT → Dimensional Model Mental Model
+
+A useful end-to-end mental model from the course is:
+
+```text
+Operational / OLTP data
+        ↓
+      OBT
+        ↓
+Identify business processes
+        ↓
+Determine grain
+        ↓
+Identify measures
+        ↓
+Identify descriptive context
+        ↓
+Dimensions + Facts
+        ↓
+Star / Snowflake schema
+        ↓
+OLAP / analytical workloads
+```
+
+This is not the only possible architecture, but it is a useful way to connect the concepts taught in the video.
+
+---
+
+# 23. What This Video Covered vs What It Did Not
+
+This video gives a strong introduction to **database design and dimensional modeling**, including:
+
+- conceptual/logical/physical modeling
+- ER modeling
+- keys
+- cardinality
+- normalization
+- OLTP vs OLAP
+- OBT
+- dimensional modeling
+- facts
+- dimensions
+- grain
+- measures
+- star schema
+- snowflake schema
+- surrogate keys
+- SCD
+
+It does **not** mean Data Warehousing is now completely mastered.
+
+Topics such as deeper ETL/ELT architecture, incremental processing, CDC, Bronze/Silver/Gold implementation, partitioning, orchestration, data quality, performance engineering, and production lakehouse design need separate study.
+
+---
+
+# 24. Key Mental Model
 
 ```text
 DATA MODELING
